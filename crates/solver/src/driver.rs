@@ -170,7 +170,12 @@ impl Driver {
         rated_settlement: RatedSettlement,
     ) -> Result<TransactionReceipt> {
         let settlement = rated_settlement.settlement;
-        let traded_orders = settlement.traded_orders().cloned().collect::<Vec<_>>();
+        let user_orders = settlement
+            .encoder
+            .order_trades()
+            .iter()
+            .map(|order_trade| order_trade.trade.order.clone())
+            .collect::<Vec<_>>();
 
         self.metrics
             .settlement_revertable_status(settlement.revertable(), solver.name());
@@ -192,7 +197,7 @@ impl Driver {
                     auction_id,
                     receipt.transaction_hash
                 );
-                traded_orders
+                user_orders
                     .iter()
                     .for_each(|order| self.metrics.order_settled(order, name));
                 self.metrics.settlement_submitted(
