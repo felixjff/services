@@ -201,6 +201,8 @@ async fn vault_balances(web3: Web3) {
         None,
         None.into(),
         None,
+        5.0,
+        Duration::from_secs(1200),
     );
     driver.single_run().await.unwrap();
 

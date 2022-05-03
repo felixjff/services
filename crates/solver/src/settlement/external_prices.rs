@@ -73,6 +73,22 @@ impl ExternalPrices {
             .unwrap_or_else(|| panic!("missing price for {token}"))
     }
 
+    /// Converts an `f64` token amount into its native asset equivalent.
+    ///
+    /// # Panic
+    ///
+    /// This method panics if the specified token does not have a price or if
+    /// any conversions from floating point numbers to rationals encounter any
+    /// errors.
+    pub fn get_native_amount_f64(&self, token: H160, amount: f64) -> f64 {
+        let amount = BigRational::from_float(amount)
+            .unwrap_or_else(|| panic!("invalid token amount {amount}"));
+        let native_amount = self.get_native_amount(token, amount);
+        native_amount
+            .to_f64()
+            .unwrap_or_else(|| panic!("failed to convert rational {native_amount} to float"))
+    }
+
     /// Converts a token amount into its native asset equivalent.
     ///
     /// This method is similar to [`get_native_amount`] except that it will

@@ -62,6 +62,8 @@ pub struct Driver {
     max_settlement_price_deviation: Option<Ratio<BigInt>>,
     token_list_restriction_for_price_checks: PriceCheckTokens,
     tenderly: Option<TenderlyApi>,
+    order_max_gas_surcharge_factor: f64,
+    order_min_gas_surcharge_filter_age: Duration,
 }
 impl Driver {
     #[allow(clippy::too_many_arguments)]
@@ -90,6 +92,8 @@ impl Driver {
         max_settlement_price_deviation: Option<Ratio<BigInt>>,
         token_list_restriction_for_price_checks: PriceCheckTokens,
         tenderly: Option<TenderlyApi>,
+        order_max_gas_surcharge_factor: f64,
+        order_min_gas_surcharge_filter_age: Duration,
     ) -> Self {
         let post_processing_pipeline = PostProcessingPipeline::new(
             native_token,
@@ -126,6 +130,8 @@ impl Driver {
             max_settlement_price_deviation,
             token_list_restriction_for_price_checks,
             tenderly,
+            order_max_gas_surcharge_factor,
+            order_min_gas_surcharge_filter_age,
         }
     }
 
@@ -436,6 +442,28 @@ impl Driver {
             );
         }
 
+        let external_prices =
+            ExternalPrices::try_from_auction_prices(self.native_token, auction.prices)
+                .context("malformed acution prices")?;
+        tracing::debug!("estimated prices: {:?}", external_prices);
+
+        let before_count = auction.orders.len();
+        auction_preprocessing::filter_orders_with_insufficient_fees(
+            &mut auction.orders,
+            &external_prices,
+            &*self.gas_price_estimator,
+            self.order_max_gas_surcharge_factor,
+            self.order_min_gas_surcharge_filter_age,
+        )
+        .await?;
+        if before_count != auction.orders.len() {
+            tracing::debug!(
+                "reduced {} orders to {} because of insufficient fees",
+                before_count,
+                auction.orders.len(),
+            );
+        }
+
         let orders = auction
             .orders
             .into_iter()
@@ -453,11 +481,6 @@ impl Driver {
             .collect::<Vec<_>>();
         tracing::info!("got {} orders: {:?}", orders.len(), orders);
 
-        let external_prices =
-            ExternalPrices::try_from_auction_prices(self.native_token, auction.prices)
-                .context("malformed acution prices")?;
-        tracing::debug!("estimated prices: {:?}", external_prices);
-
         let liquidity = self
             .liquidity_collector
             .get_liquidity_for_orders(&orders, Block::Number(current_block_during_liquidity_fetch))
@@ -474,7 +497,7 @@ impl Driver {
             .gas_price_estimator
             .estimate()
             .await
-            .context("failed to estimate gas price")?;
+            .context("failed to estimate gas price for solving")?;
         tracing::debug!("solving with gas price of {:?}", gas_price);
 
         let mut solver_settlements = Vec::new();

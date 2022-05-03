@@ -262,6 +262,8 @@ async fn onchain_settlement(web3: Web3) {
         None,
         None.into(),
         None,
+        5.0,
+        Duration::from_secs(1200),
     );
     driver.single_run().await.unwrap();
 

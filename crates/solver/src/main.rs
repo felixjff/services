@@ -304,6 +304,23 @@ struct Arguments {
     /// How pending transactions should be fetched.
     #[clap(long, env, arg_enum, default_value = "ignore")]
     pending_transaction_config: PendingTransactionConfig,
+
+    /// Maximum gas surcharge multiplier for including an order. That is, if the current gas price
+    /// is this parameter times higher than the gas price used for fee amount estimates, then the
+    /// order will be excluded.
+    #[clap(long, env, default_value = "5")]
+    order_max_gas_surcharge_factor: f64,
+
+    /// The minimum age for an order to be filtered by the `order_max_gas_surcharge` flag. This
+    /// allows filtering to only apply to long-standing orders that were placed during low gas
+    /// price times. Defaults to 20 minutes, the default validity for a CowSwap order.
+    #[clap(
+        long,
+        env,
+        default_value = "1200",
+        parse(try_from_str = shared::arguments::duration_from_seconds),
+    )]
+    order_min_gas_surcharge_filter_age: Duration,
 }
 
 #[derive(Copy, Clone, Debug, clap::ArgEnum)]
@@ -659,6 +676,8 @@ async fn main() {
             .map(|max_price_deviation| Ratio::from_float(max_price_deviation).unwrap()),
         args.token_list_restriction_for_price_checks.into(),
         tenderly,
+        args.order_max_gas_surcharge_factor,
+        args.order_min_gas_surcharge_filter_age,
     );
 
     let maintainer = ServiceMaintenance {
